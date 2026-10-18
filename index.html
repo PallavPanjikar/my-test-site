@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Scroll Video POC</title>
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+
+        /* ---------- NAVIGATION BAR (glass) ---------- */
+        .nav {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            /* gap from the screen edges */
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px 12px 20px;
+            /* space inside the bar */
+            border-radius: 26px;
+            /* rounded on all 4 corners */
+            box-shadow:
+                0 10px 40px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.45),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        /* The glass layer sits behind the logo and buttons */
+        .nav::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            border-radius: inherit;
+            background: linear-gradient(120deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.05) 60%, rgba(255, 255, 255, 0.14));
+            /* Frosted glass: works on every browser */
+            -webkit-backdrop-filter: blur(14px) saturate(1.7);
+            backdrop-filter: blur(14px) saturate(1.7);
+        }
+
+        /* Chrome / Edge only: adds the liquid refraction and distortion */
+        @supports (not (-webkit-hyphens: none)) and (not (-moz-appearance: none)) {
+            .nav::before {
+                backdrop-filter: url(#glass-distort) blur(4px) saturate(1.8) brightness(1.1);
+            }
+        }
+
+        /* Soft light streak across the glass */
+        .nav::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            border-radius: inherit;
+            pointer-events: none;
+            background: linear-gradient(105deg, transparent 20%, rgba(255, 255, 255, 0.18) 38%, transparent 52%);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .logo img {
+            height: 30px;
+            width: auto;
+            display: block;
+        }
+
+        .logo span {
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-links {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            gap: 6px;
+        }
+
+        .nav-links a {
+            display: block;
+            padding: 9px 18px;
+            border-radius: 18px;
+            color: #fff;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        @media (max-width: 480px) {
+            .logo span {
+                display: none;
+            }
+
+            /* keep the bar tidy on small phones */
+            .nav-links a {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* ---------- PLACES DROPDOWN ---------- */
+        .dropdown {
+            position: relative;
+        }
+
+        .dropdown-toggle {
+            display: block;
+            padding: 9px 18px;
+            border: none;
+            border-radius: 18px;
+            background: transparent;
+            color: #fff;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .dropdown-toggle:hover,
+        .dropdown.open .dropdown-toggle {
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        /* Small arrow next to the word "Places" */
+        .dropdown-toggle::after {
+            content: "▾";
+            display: inline-block;
+            margin-left: 6px;
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .dropdown.open .dropdown-toggle::after {
+            transform: rotate(180deg);
+        }
+
+        /* The menu that opens below the button (glass look, same style as the bar) */
+        .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 20px);
+            right: 0;
+            min-width: 170px;
+            margin: 0;
+            padding: 8px;
+            list-style: none;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: linear-gradient(120deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+            -webkit-backdrop-filter: blur(18px) saturate(1.7);
+            backdrop-filter: blur(18px) saturate(1.7);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+
+            /* Hidden until clicked */
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+        }
+
+        .dropdown.open .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-menu a {
+            display: block;
+            padding: 10px 16px;
+            border-radius: 14px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            .dropdown-toggle {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* ---------- HERO SECTION ---------- */
+        .hero {
+            position: relative;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 24px;
+            box-sizing: border-box;
+            /* CHANGE "hero.jpg" if your image has a different name */
+            background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url("hero.jpg") center / cover no-repeat;
+        }
+
+        .hero-content {
+            max-width: 720px;
+        }
+
+        .hero h1 {
+            font-size: clamp(36px, 7vw, 76px);
+            margin: 0 0 16px;
+            line-height: 1.05;
+            letter-spacing: -1px;
+        }
+
+        .hero p {
+            font-size: clamp(16px, 2.2vw, 22px);
+            margin: 0 auto 36px;
+            opacity: 0.85;
+            line-height: 1.5;
+            max-width: 560px;
+        }
+
+        .loader {
+            width: 220px;
+            margin: 0 auto;
+        }
+
+        .bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            width: 0%;
+            background: #fff;
+            transition: width 0.2s;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.7;
+        }
+
+        /* ---------- BEACH TEXT SECTION ---------- */
+        .beach {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        .beach h2 {
+            margin: 0;
+            font-size: clamp(80px, 22vw, 320px);
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            color: #fff;
+        }
+
+        /* ---------- SCROLL VIDEO SECTION ---------- */
+        .scroll-section {
+            height: 600vh;
+            position: relative;
+        }
+
+        /* bigger = slower video */
+        canvas {
+            position: sticky;
+            top: 0;
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* ---------- ABOUT SECTION (placeholder so the About button has somewhere to go) ---------- */
+        .about {
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 80px 24px;
+            box-sizing: border-box;
+            background: #0b0b12;
+        }
+
+        .about h2 {
+            font-size: clamp(28px, 5vw, 48px);
+            margin: 0 0 12px;
+        }
+
+        .about p {
+            max-width: 520px;
+            margin: 0 auto;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+
+        /* ---------- CONTACT SECTION ---------- */
+        .contact {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 120px 24px 80px;
+            box-sizing: border-box;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(255, 140, 66, 0.25), transparent 45%),
+                radial-gradient(circle at 85% 80%, rgba(120, 80, 255, 0.28), transparent 50%),
+                #000;
+        }
+
+        .contact-inner {
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .contact h2 {
+            font-size: clamp(32px, 6vw, 56px);
+            margin: 0 0 10px;
+            letter-spacing: -1px;
+        }
+
+        .contact-sub {
+            margin: 0 0 32px;
+            opacity: 0.75;
+            line-height: 1.5;
+        }
+
+        .contact .field {
+            margin-bottom: 18px;
+        }
+
+        .contact label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 12px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            opacity: 0.75;
+        }
+
+        .contact input,
+        .contact textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.08);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            font-family: inherit;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .contact textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .contact input::placeholder,
+        .contact textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .contact input:focus,
+        .contact textarea:focus {
+            border-color: rgba(255, 255, 255, 0.65);
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        .contact-submit {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 999px;
+            background: #fff;
+            color: #000;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, opacity 0.2s;
+        }
+
+        .contact-submit:hover {
+            opacity: 0.9;
+        }
+
+        .contact-submit:active {
+            transform: scale(0.98);
+        }
+
+        .contact-thanks {
+            display: none;
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        .contact-thanks.show {
+            display: block;
+        }
+
+        /* Keeps 4 nav buttons comfortably on small phones */
+        @media (max-width: 480px) {
+            .nav-links {
+                gap: 0;
+            }
+
+            .nav-links a,
+            .dropdown-toggle {
+                padding: 8px 9px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Invisible helper that creates the glass distortion. Do not delete. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <filter id="glass-distort" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="2" seed="7" result="noise" />
+            <feGaussianBlur in="noise" stdDeviation="2" result="softNoise" />
+            <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="70" xChannelSelector="R"
+                yChannelSelector="G" />
+        </filter>
+    </svg>
+
+    <!-- ---------- NAVIGATION BAR ---------- -->
+    <nav class="nav">
+        <a href="#home" class="logo">
+            <img src="Logo.png" alt="Logo"> <span>Mockweb</span>
+        </a>
+
+        <ul class="nav-links">
+            <li><a href="#home">Home</a></li>
+            <li><a href="#about">About</a></li>
+            <li class="dropdown" id="placesDropdown">
+                <button class="dropdown-toggle" id="placesToggle" aria-expanded="false">Places</button>
+                <ul class="dropdown-menu">
+                    <li><a href="#beach">Beach</a></li>
+                    <li><a href="#river">River</a></li>
+                </ul>
+            </li>
+            <li><a href="#contact">Contact Us</a></li>
+            <!-- To add a button, copy one line above and paste it here, e.g.:
+    <li><a href="#contact">Contact</a></li> -->
+        </ul>
+    </nav>
+
+    <section class="hero" id="home">
+        <div class="hero-content">
+            <h1>Experience motion, one scroll at a time.</h1>
+            <p>A short story told frame by frame. Scroll down to move through it, and scroll back up to rewind.</p>
+            <div class="loader">
+                <div class="bar">
+                    <div class="bar-fill" id="fill"></div>
+                </div>
+                <div class="status" id="status">Loading 0%</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="beach" id="beach">
+        <h2>Beach</h2>
+    </section>
+    <section class="scroll-section" id="scrollSection">
+        <canvas id="c"></canvas>
+    </section>
+
+    <section class="beach" id="river">
+        <h2>River</h2>
+    </section>
+
+    <section class="scroll-section" id="scrollSection2" style="height: 300vh;">
+        <canvas id="c2"></canvas>
+    </section>
+    <section class="about" id="about">
+        <div>
+            <h2>About</h2>
+            <p>This entire website is made for the sole purpose of experimentation. This does not advertise nor promote
+                any gambling sites</p>
+        </div>
+    </section>
+
+    <section class="contact" id="contact">
+        <div class="contact-inner">
+            <h2>Contact Us</h2>
+            <p class="contact-sub">Leave your details and we'll get back to you.</p>
+
+            <form id="contactForm">
+                <div class="field">
+                    <label for="cName">Name</label>
+                    <input type="text" id="cName" name="name" placeholder="Your full name" autocomplete="name" required>
+                </div>
+
+                <div class="field">
+                    <label for="cEmail">Email</label>
+                    <input type="email" id="cEmail" name="email" placeholder="you@example.com" autocomplete="email"
+                        required>
+                </div>
+
+                <div class="field">
+                    <label for="cPhone">Contact number</label>
+                    <input type="tel" id="cPhone" name="phone" placeholder="+91 98765 43210" autocomplete="tel"
+                        pattern="[0-9+\-\s()]{7,18}" title="Enter a valid phone number" required>
+                </div>
+
+                <div class="field">
+                    <label for="cMessage">Message (optional)</label>
+                    <textarea id="cMessage" name="message" placeholder="How can we help?"></textarea>
+                </div>
+
+                <button type="submit" class="contact-submit">Send message</button>
+                <div class="contact-thanks" id="contactThanks">Thank you! We'll be in touch soon.</div>
+            </form>
+        </div>
+    </section>
+    <script>
+        // ---- Your scroll videos. To add another one later, copy a block and edit it. ----
+        const videos = [
+            {
+                sectionId: 'scrollSection',
+                canvasId: 'c',
+                count: 133,
+                path: i => `frames/frame_${String(i).padStart(3, '0')}.png`
+            },
+            {
+                sectionId: 'scrollSection2',
+                canvasId: 'c2',
+                count: 45,
+                path: i => `River_Town_frames/frame_${String(i).padStart(3, '0')}.png`
+            }
+        ];
+
+        const fill = document.getElementById('fill');
+        const loadStatus = document.getElementById('status');
+
+        videos.forEach(v => {
+            v.section = document.getElementById(v.sectionId);
+            v.canvas = document.getElementById(v.canvasId);
+            v.ctx = v.canvas.getContext('2d');
+            v.images = [];
+            v.current = 0;
+            v.state = 'idle';   // idle = not started, loading, ready
+        });
+
+        // Loads the frames of ONE video (only if it has not started yet)
+        function loadVideo(v) {
+            if (v.state !== 'idle') return;
+            v.state = 'loading';
+            let done = 0;
+
+            for (let i = 1; i <= v.count; i++) {
+                const img = new Image();
+                img.onload = img.onerror = () => {
+                    done++;
+
+                    // The hero loading bar only follows the first video
+                    if (v === videos[0]) {
+                        const pct = Math.round((done / v.count) * 100);
+                        fill.style.width = pct + '%';
+                        loadStatus.textContent = pct < 100 ? `Loading ${pct}%` : 'Ready. Scroll down ↓';
+                    }
+
+                    if (done === v.count) v.state = 'ready';
+                    if (i - 1 === v.current) draw(v, v.current);
+                };
+                img.src = v.path(i);
+                v.images.push(img);
+            }
+        }
+
+        function resize() {
+            videos.forEach(v => {
+                v.canvas.width = window.innerWidth * window.devicePixelRatio;
+                v.canvas.height = window.innerHeight * window.devicePixelRatio;
+                draw(v, v.current);
+            });
+        }
+
+        function draw(v, i) {
+            const cw = v.canvas.width, ch = v.canvas.height;
+            const img = v.images[i];
+
+            // Frame not ready yet: show a simple "Loading..." screen
+            if (!img || !img.complete || !img.naturalWidth) {
+                v.ctx.fillStyle = '#000';
+                v.ctx.fillRect(0, 0, cw, ch);
+                v.ctx.fillStyle = '#fff';
+                v.ctx.globalAlpha = 0.7;
+                v.ctx.font = `${14 * window.devicePixelRatio}px "Segoe UI", Arial, sans-serif`;
+                v.ctx.textAlign = 'center';
+                v.ctx.fillText('LOADING...', cw / 2, ch / 2);
+                v.ctx.globalAlpha = 1;
+                return;
+            }
+
+            // Math.max = fills the screen (may crop). Change to Math.min to see the whole frame.
+            const scale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
+            const w = img.naturalWidth * scale;
+            const h = img.naturalHeight * scale;
+            v.ctx.clearRect(0, 0, cw, ch);
+            v.ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+        }
+
+        function onScroll() {
+            videos.forEach((v, k) => {
+                // Start loading a video when the visitor reaches the video before it
+                if (k > 0) {
+                    const previous = videos[k - 1];
+                    if (previous.section.offsetTop <= window.scrollY + window.innerHeight) {
+                        loadVideo(v);
+                    }
+                }
+
+                // Pick the frame that matches the scroll position
+                const start = v.section.offsetTop;
+                const length = v.section.offsetHeight - window.innerHeight;
+                const progress = Math.min(Math.max((window.scrollY - start) / length, 0), 1);
+                const index = Math.min(v.count - 1, Math.floor(progress * v.count));
+                if (index !== v.current) {
+                    v.current = index;
+                    requestAnimationFrame(() => draw(v, v.current));
+                }
+            });
+        }
+
+        window.addEventListener('scroll', onScroll);
+        window.addEventListener('resize', resize);
+        resize();
+        loadVideo(videos[0]);   // only the first video loads when the page opens
+        onScroll();
+
+        // ---- Places dropdown: opens on click, closes when you pick an item or click elsewhere ----
+        const placesDropdown = document.getElementById('placesDropdown');
+        const placesToggle = document.getElementById('placesToggle');
+
+        function closePlaces() {
+            placesDropdown.classList.remove('open');
+            placesToggle.setAttribute('aria-expanded', 'false');
+        }
+
+        placesToggle.addEventListener('click', e => {
+            e.stopPropagation();
+            const isOpen = placesDropdown.classList.toggle('open');
+            placesToggle.setAttribute('aria-expanded', isOpen);
+        });
+
+        document.addEventListener('click', closePlaces);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlaces(); });
+
+        // ---- Contact form: shows a thank-you message (does not send data anywhere yet) ----
+        const contactForm = document.getElementById('contactForm');
+        const contactThanks = document.getElementById('contactThanks');
+
+        contactForm.addEventListener('submit', e => {
+            e.preventDefault();
+            contactForm.reset();
+            contactThanks.classList.add('show');
+            setTimeout(() => contactThanks.classList.remove('show'), 6000);
+        });
+    </script>
+</body>
+
+</html>
